@@ -1,0 +1,70 @@
+@page "/excel-creator"
+@using ClosedXML.Excel
+@inject IJSRuntime JSRuntime
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+<h3>ایجاد فایل اکسل</h3>
+
+<EditForm FormName="WBSProject" EditContext="@EditContext" OnValidSubmit="@HandleValidSubmit">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="form-group">
+        <label for="projectName">نام پروژه:</label>
+        <InputText id="projectName" @bind-Value="@ProjectInfo.Name" class="form-control" />
+    </div>
+
+    <div class="form-group">
+        <label for="indentationLevel">تعداد سطح تورفتگی:</label>
+        <InputNumber id="indentationLevel" @bind-Value="@ProjectInfo.IndentationLevel" class="form-control" />
+    </div>
+
+    <button type="submit" class="btn btn-primary">ایجاد و دانلود فایل اکسل</button>
+</EditForm>
+
+@code {
+    public class ProjectInfoModel
+    {
+        public string Name { get; set; } = "wbs-project";
+        public int IndentationLevel { get; set; } = 5;
+    }
+
+    private ProjectInfoModel ProjectInfo = new ProjectInfoModel();
+
+    private EditContext EditContext;
+
+    protected override void OnInitialized()
+    {
+        EditContext = new EditContext(ProjectInfo);
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Activity Codes");
+
+        // اضافه کردن سربرگها و فرمولها
+        worksheet.Cell("A1").Value = "کد فعالیت";
+        worksheet.Cell("B1").Value = "نام فعالیت";
+        worksheet.Cell("C1").Value = "توضیحات";
+        worksheet.Cell("D1").Value = "ضریب وزنی";
+        worksheet.Cell("E1").Value = "ضریب حجمی";
+        worksheet.Cell("F1").Value = "تاریخ شروع";
+        worksheet.Cell("G1").Value = "تاریخ پایان";
+
+        // اضافه کردن سربرگهای سطوح فعالیت بر اساس تعداد سطح تورفتگی
+        for (int i = 1; i <= ProjectInfo.IndentationLevel; i++)
+        {
+            worksheet.Cell(1, i + 7).Value = $"سطح فعالیت {i}";
+        }
+
+        // ایجاد فایل اکسل و دانلود
+        using (var stream = new MemoryStream())
+        {
+            workbook.SaveAs(stream);
+            var content = stream.ToArray();
+            var base64Content = Convert.ToBase64String(content);
+            await JSRuntime.InvokeVoidAsync("BlazorDownloadFile", ProjectInfo.Name + ".xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", base64Content);
+        }
+    }
+}

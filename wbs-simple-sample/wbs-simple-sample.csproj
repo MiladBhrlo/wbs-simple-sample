@@ -8,4 +8,9 @@
     <AssemblyName>$(AssemblyName.Replace(' ', '_'))</AssemblyName>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.104.0-preview2" />
+    <PackageReference Include="EPPlusFree" Version="4.5.3.8" />
+  </ItemGroup>
+
 </Project>

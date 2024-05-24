@@ -1,0 +1,108 @@
+@page "/excel-upload"
+@using ClosedXML.Excel
+@using System.Text
+
+<h3>آپلود فایل اکسل</h3>
+<InputFile OnChange="@ProcessExcelUpload" />
+
+@if (!String.IsNullOrEmpty(wbsText.ToString()))
+{
+    <textarea>@wbsText.ToString()</textarea>
+}
+
+@code {
+    private StringBuilder wbsText = new StringBuilder();
+    public class WbsNode
+    {
+        public string ActivityCode { get; set; }
+        public string ActivityName { get; set; }
+        public List<WbsNode> Children { get; set; } = new List<WbsNode>();
+
+        public WbsNode(string code, string name)
+        {
+            ActivityCode = code;
+            ActivityName = name;
+        }
+
+        public void AddChild(WbsNode child)
+        {
+            Children.Add(child);
+        }
+    }
+
+    private async Task ProcessExcelUpload(InputFileChangeEventArgs e)
+    {
+
+        var excelFile = e.File;
+        if (excelFile != null)
+        {
+            using (var stream = new MemoryStream())
+            {
+                await excelFile.OpenReadStream().CopyToAsync(stream);
+                using (var workbook = new XLWorkbook(stream))
+                {
+                    var worksheet = workbook.Worksheet("Activity Codes");
+                    var wbsRoot = new WbsNode("ROOT", "Project Root");
+                    // تشخیص تعداد سطوح تورفتگی بر اساس سربرگهای فایل اکسل
+                    int indentationLevel = DetectIndentationLevel(worksheet);
+
+                    // فرض بر این است که سطوح فعالیت از ستون H شروع میشوند
+                    int levelStartColumn = 8;
+
+                    for (int row = 2; row <= worksheet.LastRowUsed().RowNumber(); row++)
+                    {
+                        WbsNode parentNode = wbsRoot;
+                        for (int col = levelStartColumn; col < levelStartColumn + indentationLevel; col++)
+                        {
+                            var cellValue = worksheet.Cell(row, col).GetValue<string>();
+                            if (!string.IsNullOrEmpty(cellValue))
+                            {
+                                var existingChild = parentNode.Children.FirstOrDefault(c => c.ActivityName == cellValue);
+                                if (existingChild == null)
+                                {
+                                    var childNode = new WbsNode(worksheet.Cell(row, 1).GetValue<string>(), cellValue);
+                                    parentNode.AddChild(childNode);
+                                    parentNode = childNode;
+                                }
+                                else
+                                {
+                                    parentNode = existingChild;
+                                }
+                            }
+                        }
+                    }
+
+                    DisplayWbsStructure(wbsRoot, 0);
+                }
+            }
+        }
+    }
+
+    private void DisplayWbsStructure(WbsNode node, int level)
+    {
+
+        // اضافه کردن فاصله برای نمایش سطح درخت
+        wbsText.AppendLine(new String('-', level * 2) + node.ActivityName);
+
+        foreach (var child in node.Children)
+        {
+            // فراخوانی بازگشتی برای هر فرزند
+            DisplayWbsStructure(child, level + 1);
+        }
+    }
+
+    private int DetectIndentationLevel(IXLWorksheet worksheet)
+    {
+        // تشخیص تعداد سطوح تورفتگی بر اساس سربرگهای فایل اکسل
+        // این کد فرض میکند که سربرگهای مربوط به سطوح فعالیت با "سطح فعالیت" شروع میشوند
+        int level = 0;
+        while (!string.IsNullOrEmpty(worksheet.Cell(1, level + 8).GetValue<string>()))
+        {
+            if (worksheet.Cell(1, level + 8).GetValue<string>().StartsWith("سطح فعالیت"))
+            {
+                level++;
+            }
+        }
+        return level;
+    }
+}
